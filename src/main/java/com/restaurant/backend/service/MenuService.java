@@ -52,9 +52,8 @@ public class MenuService {
     @Transactional
     public MenuItemResponse createMenuItem(MenuItemRequest request) {
         // Validate name
-        if (request.getName() == null || request.getName().trim().isEmpty()) {
-            throw new IllegalArgumentException("Menu item name is required");
-        }
+        validateMenuItemName(request.getName());
+        validateMenuItemDescription(request.getDescription());
 
         // Validate price
         if (request.getPrice() == null || request.getPrice().compareTo(BigDecimal.ZERO) < 0) {
@@ -97,7 +96,10 @@ public class MenuService {
 
         // Validate name
         if (request.getName() != null && !request.getName().trim().isEmpty()) {
-            menuItem.setName(request.getName().trim());
+            menuItem.setName(validateMenuItemName(request.getName()));
+        }
+        if (request.getDescription() != null) {
+            validateMenuItemDescription(request.getDescription());
         }
 
         // Validate price
@@ -302,6 +304,9 @@ public class MenuService {
         if (value.matches("^/uploads/menu-items/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\.(jpg|png|gif)$")) {
             return value;
         }
+        if (value.regionMatches(true, 0, "data:", 0, 5)) {
+            throw new InvalidImageUrlException("Image data must be uploaded; provide an HTTP or HTTPS image URL");
+        }
         if (value.length() > 2048) {
             throw new InvalidImageUrlException("Image URL cannot exceed 2048 characters");
         }
@@ -324,5 +329,21 @@ public class MenuService {
             throw new InvalidImageUrlException("Image URL cannot exceed 2048 characters");
         }
         return normalizedUrl;
+    }
+
+    private String validateMenuItemName(String name) {
+        if (name == null || name.trim().isEmpty()) {
+            throw new IllegalArgumentException("Menu item name is required");
+        }
+        if (name.trim().length() > 120) {
+            throw new IllegalArgumentException("Menu item name cannot exceed 120 characters");
+        }
+        return name.trim();
+    }
+
+    private void validateMenuItemDescription(String description) {
+        if (description != null && description.length() > 500) {
+            throw new IllegalArgumentException("Menu item description cannot exceed 500 characters");
+        }
     }
 }

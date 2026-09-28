@@ -1,6 +1,7 @@
 package com.restaurant.backend.dto;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 public class MenuItemRequest {
     private String name;
@@ -11,6 +12,7 @@ public class MenuItemRequest {
     private Integer preparationTimeMinutes;
     private Long categoryId;
     private Boolean available;
+    private List<MenuItemAddOnRequest> addOns;
 
     public MenuItemRequest() {
     }
@@ -77,5 +79,13 @@ public class MenuItemRequest {
 
     public void setAvailable(Boolean available) {
         this.available = available;
+    }
+
+    public List<MenuItemAddOnRequest> getAddOns() {
+        return addOns;
+    }
+
+    public void setAddOns(List<MenuItemAddOnRequest> addOns) {
+        this.addOns = addOns;
     }
 }

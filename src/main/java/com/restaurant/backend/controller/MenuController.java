@@ -6,6 +6,7 @@ import com.restaurant.backend.dto.MenuItemResponse;
 import com.restaurant.backend.service.InvalidImageUrlException;
 import com.restaurant.backend.service.MenuImageStorageService;
 import com.restaurant.backend.service.MenuService;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.multipart.MultipartFile;
@@ -41,6 +42,9 @@ public class MenuController {
             return ResponseEntity.ok(menuItem);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+        } catch (DataIntegrityViolationException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body("This menu item is referenced by existing orders and cannot be deleted. Disable it instead to keep order history intact.");
         }
     }
 

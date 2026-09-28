@@ -1,0 +1,2 @@
+ALTER TABLE IF EXISTS menu_items
+    ALTER COLUMN description TYPE TEXT;

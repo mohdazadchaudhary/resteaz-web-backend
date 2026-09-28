@@ -1,0 +1,2 @@
+ALTER TABLE IF EXISTS menu_items
+    ALTER COLUMN image_url TYPE TEXT;

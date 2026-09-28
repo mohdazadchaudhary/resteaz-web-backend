@@ -2,6 +2,8 @@ package com.restaurant.backend.entity;
 
 import jakarta.persistence.*;
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "order_items")
@@ -27,6 +29,9 @@ public class OrderItem {
 
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal subtotal;
+
+    @OneToMany(mappedBy = "orderItem", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<OrderItemAddOn> addOns = new ArrayList<>();
 
     public OrderItem() {
     }
@@ -79,11 +84,23 @@ public class OrderItem {
         this.subtotal = subtotal;
     }
 
+    public List<OrderItemAddOn> getAddOns() {
+        return addOns;
+    }
+
+    public void setAddOns(List<OrderItemAddOn> addOns) {
+        this.addOns = addOns;
+    }
+
     @PrePersist
     @PreUpdate
     public void calculateSubtotal() {
         if (unitPrice != null && quantity > 0) {
-            this.subtotal = unitPrice.multiply(BigDecimal.valueOf(quantity));
+            BigDecimal addOnUnitTotal = addOns.stream()
+                    .map(OrderItemAddOn::getSubtotal)
+                    .filter(java.util.Objects::nonNull)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            this.subtotal = unitPrice.multiply(BigDecimal.valueOf(quantity)).add(addOnUnitTotal);
         }
     }
 }

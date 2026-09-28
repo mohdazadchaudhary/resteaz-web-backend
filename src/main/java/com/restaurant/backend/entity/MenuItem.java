@@ -17,12 +17,13 @@ public class MenuItem {
     @Column(nullable = false)
     private String name;
 
+    @Column(columnDefinition = "TEXT")
     private String description;
 
     @Column(nullable = false)
     private BigDecimal price;
 
-    @Column(length = 2048)
+    @Column(columnDefinition = "TEXT")
     private String imageUrl;
 
     @Column(length = 32)

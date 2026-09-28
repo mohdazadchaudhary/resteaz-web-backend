@@ -1,17 +1,22 @@
 package com.restaurant.backend.service;
 
 import com.restaurant.backend.dto.OrderItemRequest;
+import com.restaurant.backend.dto.OrderItemAddOnRequest;
+import com.restaurant.backend.dto.OrderItemAddOnResponse;
 import com.restaurant.backend.dto.OrderItemResponse;
 import com.restaurant.backend.dto.OrderRequest;
 import com.restaurant.backend.dto.OrderResponse;
 import com.restaurant.backend.entity.MenuItem;
+import com.restaurant.backend.entity.AddOn;
 import com.restaurant.backend.entity.Order;
 import com.restaurant.backend.entity.OrderItem;
+import com.restaurant.backend.entity.OrderItemAddOn;
 import com.restaurant.backend.entity.OrderStatus;
 import com.restaurant.backend.entity.PaymentStatus;
 import com.restaurant.backend.entity.Restaurant;
 import com.restaurant.backend.entity.RestaurantTable;
 import com.restaurant.backend.repository.MenuItemRepository;
+import com.restaurant.backend.repository.AddOnRepository;
 import com.restaurant.backend.repository.OrderRepository;
 import com.restaurant.backend.repository.RestaurantTableRepository;
 import org.springframework.stereotype.Service;
@@ -31,14 +36,17 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final RestaurantTableRepository tableRepository;
     private final MenuItemRepository menuItemRepository;
+    private final AddOnRepository addOnRepository;
 
     public OrderService(
             OrderRepository orderRepository,
             RestaurantTableRepository tableRepository,
-            MenuItemRepository menuItemRepository) {
+            MenuItemRepository menuItemRepository,
+            AddOnRepository addOnRepository) {
         this.orderRepository = orderRepository;
         this.tableRepository = tableRepository;
         this.menuItemRepository = menuItemRepository;
+        this.addOnRepository = addOnRepository;
     }
 
     @Transactional
@@ -115,6 +123,43 @@ public class OrderService {
             orderItem.setMenuItem(menuItem);
             orderItem.setQuantity(itemRequest.getQuantity());
             orderItem.setUnitPrice(menuItem.getPrice()); // Use actual price from DB
+            List<OrderItemAddOn> selectedAddOns = new ArrayList<>();
+            Map<Long, Boolean> seenAddOns = new HashMap<>();
+            if (itemRequest.getAddOns() != null) {
+                for (OrderItemAddOnRequest addOnRequest : itemRequest.getAddOns()) {
+                    if (addOnRequest == null || addOnRequest.getAddOnId() == null) {
+                        throw new IllegalArgumentException("Every selected add-on must include an ID");
+                    }
+                    if (addOnRequest.getQuantity() <= 0 || addOnRequest.getQuantity() > 20) {
+                        throw new IllegalArgumentException("Add-on quantity must be between 1 and 20");
+                    }
+                    if (seenAddOns.put(addOnRequest.getAddOnId(), true) != null) {
+                        throw new IllegalArgumentException("An add-on cannot be selected more than once per menu item");
+                    }
+                    AddOn addOn = addOnRepository.findById(addOnRequest.getAddOnId())
+                            .orElseThrow(() -> new IllegalArgumentException(
+                                    "Add-on not found: " + addOnRequest.getAddOnId()));
+                    if (!addOn.isAvailable()) {
+                        throw new IllegalArgumentException("Add-on '" + addOn.getName() + "' is not available");
+                    }
+                    if (menuItem.getAddOns().stream().noneMatch(associated -> associated.getId().equals(addOn.getId()))) {
+                        throw new IllegalArgumentException("Add-on '" + addOn.getName()
+                                + "' is not available for menu item '" + menuItem.getName() + "'");
+                    }
+
+                    OrderItemAddOn snapshot = new OrderItemAddOn();
+                    snapshot.setOrderItem(orderItem);
+                    snapshot.setAddOnId(addOn.getId());
+                    snapshot.setName(addOn.getName());
+                    snapshot.setUnitPrice(addOn.getPrice());
+                    snapshot.setQuantity(addOnRequest.getQuantity());
+                    snapshot.setSubtotal(addOn.getPrice()
+                            .multiply(BigDecimal.valueOf(addOnRequest.getQuantity()))
+                            .multiply(BigDecimal.valueOf(itemRequest.getQuantity())));
+                    selectedAddOns.add(snapshot);
+                }
+            }
+            orderItem.setAddOns(selectedAddOns);
             orderItem.calculateSubtotal(); // Calculate subtotal
 
             orderItems.add(orderItem);
@@ -149,7 +194,9 @@ public class OrderService {
 
         Map<OrderItemKey, Integer> savedItems = new HashMap<>();
         for (OrderItem orderItem : order.getItems()) {
-            savedItems.merge(new OrderItemKey(orderItem.getMenuItem().getId(), orderItem.getQuantity()), 1, Integer::sum);
+            savedItems.merge(orderItemKey(orderItem.getMenuItem().getId(), orderItem.getQuantity(),
+                    orderItem.getAddOns().stream().collect(Collectors.toMap(
+                            OrderItemAddOn::getAddOnId, OrderItemAddOn::getQuantity))), 1, Integer::sum);
         }
 
         Map<OrderItemKey, Integer> requestedOrderItems = new HashMap<>();
@@ -157,13 +204,26 @@ public class OrderService {
             if (requestedItem == null || requestedItem.getMenuItemId() == null) {
                 return false;
             }
-            requestedOrderItems.merge(
-                    new OrderItemKey(requestedItem.getMenuItemId(), requestedItem.getQuantity()), 1, Integer::sum);
+            Map<Long, Integer> addOns = new HashMap<>();
+            if (requestedItem.getAddOns() != null) {
+                for (OrderItemAddOnRequest addOn : requestedItem.getAddOns()) {
+                    if (addOn == null || addOn.getAddOnId() == null
+                            || addOns.put(addOn.getAddOnId(), addOn.getQuantity()) != null) {
+                        return false;
+                    }
+                }
+            }
+            requestedOrderItems.merge(orderItemKey(requestedItem.getMenuItemId(), requestedItem.getQuantity(), addOns),
+                    1, Integer::sum);
         }
         return savedItems.equals(requestedOrderItems);
     }
 
-    private record OrderItemKey(Long menuItemId, int quantity) {
+    private OrderItemKey orderItemKey(Long menuItemId, int quantity, Map<Long, Integer> addOns) {
+        return new OrderItemKey(menuItemId, quantity, Map.copyOf(addOns));
+    }
+
+    private record OrderItemKey(Long menuItemId, int quantity, Map<Long, Integer> addOns) {
     }
 
     @Transactional(readOnly = true)
@@ -259,6 +319,15 @@ public class OrderService {
         response.setQuantity(orderItem.getQuantity());
         response.setUnitPrice(orderItem.getUnitPrice());
         response.setSubtotal(orderItem.getSubtotal());
+        response.setAddOns(orderItem.getAddOns().stream().map(addOn -> {
+            OrderItemAddOnResponse addOnResponse = new OrderItemAddOnResponse();
+            addOnResponse.setAddOnId(addOn.getAddOnId());
+            addOnResponse.setName(addOn.getName());
+            addOnResponse.setQuantity(addOn.getQuantity());
+            addOnResponse.setUnitPrice(addOn.getUnitPrice());
+            addOnResponse.setSubtotal(addOn.getSubtotal());
+            return addOnResponse;
+        }).toList());
         return response;
     }
 }

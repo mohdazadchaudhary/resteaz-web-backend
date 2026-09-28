@@ -83,6 +83,9 @@ public class AddOnService {
     }
 
     private String normalizeDietaryType(String dietaryType) {
+        if (dietaryType == null || dietaryType.isBlank()) {
+            return null;
+        }
         String normalized = dietaryType.trim().toLowerCase(java.util.Locale.ROOT);
         if (!List.of("veg", "non-veg").contains(normalized)) {
             throw new IllegalArgumentException("Add-on type must be veg or non-veg");

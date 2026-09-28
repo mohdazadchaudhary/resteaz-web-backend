@@ -1,6 +1,7 @@
 package com.restaurant.backend.dto;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 public class OrderItemResponse {
     private Long menuItemId;
@@ -8,6 +9,7 @@ public class OrderItemResponse {
     private int quantity;
     private BigDecimal unitPrice;
     private BigDecimal subtotal;
+    private List<OrderItemAddOnResponse> addOns;
 
     public OrderItemResponse() {
     }
@@ -50,5 +52,13 @@ public class OrderItemResponse {
 
     public void setSubtotal(BigDecimal subtotal) {
         this.subtotal = subtotal;
+    }
+
+    public List<OrderItemAddOnResponse> getAddOns() {
+        return addOns;
+    }
+
+    public void setAddOns(List<OrderItemAddOnResponse> addOns) {
+        this.addOns = addOns;
     }
 }

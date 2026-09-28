@@ -1,8 +1,11 @@
 package com.restaurant.backend.dto;
 
+import java.util.List;
+
 public class OrderItemRequest {
     private Long menuItemId;
     private int quantity;
+    private List<OrderItemAddOnRequest> addOns;
 
     public OrderItemRequest() {
     }
@@ -21,5 +24,13 @@ public class OrderItemRequest {
 
     public void setQuantity(int quantity) {
         this.quantity = quantity;
+    }
+
+    public List<OrderItemAddOnRequest> getAddOns() {
+        return addOns;
+    }
+
+    public void setAddOns(List<OrderItemAddOnRequest> addOns) {
+        this.addOns = addOns;
     }
 }

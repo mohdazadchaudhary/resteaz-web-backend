@@ -1,6 +1,7 @@
 package com.restaurant.backend.service;
 
 import com.restaurant.backend.dto.OrderItemRequest;
+import com.restaurant.backend.dto.OrderItemAddOnRequest;
 import com.restaurant.backend.dto.OrderRequest;
 import com.restaurant.backend.dto.OrderResponse;
 import com.restaurant.backend.dto.TableResponse;
@@ -8,10 +9,12 @@ import com.restaurant.backend.entity.Category;
 import com.restaurant.backend.entity.MenuItem;
 import com.restaurant.backend.entity.Order;
 import com.restaurant.backend.entity.OrderItem;
+import com.restaurant.backend.entity.AddOn;
 import com.restaurant.backend.entity.OrderStatus;
 import com.restaurant.backend.entity.Restaurant;
 import com.restaurant.backend.entity.RestaurantTable;
 import com.restaurant.backend.repository.MenuItemRepository;
+import com.restaurant.backend.repository.AddOnRepository;
 import com.restaurant.backend.repository.OrderRepository;
 import com.restaurant.backend.repository.RestaurantRepository;
 import com.restaurant.backend.repository.RestaurantTableRepository;
@@ -44,6 +47,8 @@ class OrderServiceTest {
     private RestaurantRepository restaurantRepository;
     @Mock
     private MenuItemRepository menuItemRepository;
+    @Mock
+    private AddOnRepository addOnRepository;
 
     private OrderService orderService;
     private TableService tableService;
@@ -52,7 +57,7 @@ class OrderServiceTest {
 
     @BeforeEach
     void setUp() {
-        orderService = new OrderService(orderRepository, tableRepository, menuItemRepository);
+        orderService = new OrderService(orderRepository, tableRepository, menuItemRepository, addOnRepository);
         tableService = new TableService(tableRepository, restaurantRepository);
 
         Restaurant restaurant = new Restaurant();
@@ -138,6 +143,66 @@ class OrderServiceTest {
         when(menuItemRepository.findById(21L)).thenReturn(Optional.of(menuItem));
 
         assertThrows(IllegalArgumentException.class, () -> orderService.createOrder(request));
+        verify(orderRepository, never()).save(any(Order.class));
+    }
+
+    @Test
+    void pricesAssociatedAddOnsFromDatabaseAndSnapshotsThemOnOrder() {
+        AddOn cheese = new AddOn();
+        cheese.setId(31L);
+        cheese.setName("Extra Cheese");
+        cheese.setPrice(new BigDecimal("30.00"));
+        cheese.setAvailable(true);
+        menuItem.setAddOns(List.of(cheese));
+
+        OrderItemAddOnRequest selected = new OrderItemAddOnRequest();
+        selected.setAddOnId(31L);
+        selected.setQuantity(1);
+        OrderRequest orderRequest = request("table-qr-token", "checkout-add-on", 2);
+        orderRequest.getItems().get(0).setAddOns(List.of(selected));
+
+        when(tableRepository.findByQrToken("table-qr-token")).thenReturn(Optional.of(table));
+        when(orderRepository.findByIdempotencyKey("checkout-add-on")).thenReturn(Optional.empty());
+        when(menuItemRepository.findById(21L)).thenReturn(Optional.of(menuItem));
+        when(addOnRepository.findById(31L)).thenReturn(Optional.of(cheese));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> {
+            Order order = invocation.getArgument(0);
+            order.setId(101L);
+            return order;
+        });
+
+        OrderResponse response = orderService.createOrder(orderRequest);
+
+        assertEquals(new BigDecimal("85.00"), response.getTotalAmount());
+        assertEquals(new BigDecimal("60.00"), response.getItems().get(0).getAddOns().get(0).getSubtotal());
+        assertEquals("Extra Cheese", response.getItems().get(0).getAddOns().get(0).getName());
+        assertEquals(new BigDecimal("30.00"), response.getItems().get(0).getAddOns().get(0).getUnitPrice());
+    }
+
+    @Test
+    void rejectsAddOnsThatAreUnavailableOrNotAttachedToMenuItem() {
+        AddOn addOn = new AddOn();
+        addOn.setId(32L);
+        addOn.setName("Unlinked Extra");
+        addOn.setPrice(new BigDecimal("10.00"));
+        addOn.setAvailable(true);
+        OrderItemAddOnRequest selected = new OrderItemAddOnRequest();
+        selected.setAddOnId(32L);
+        OrderRequest orderRequest = request("table-qr-token", "checkout-unlinked", 1);
+        orderRequest.getItems().get(0).setAddOns(List.of(selected));
+
+        when(tableRepository.findByQrToken("table-qr-token")).thenReturn(Optional.of(table));
+        when(orderRepository.findByIdempotencyKey("checkout-unlinked")).thenReturn(Optional.empty());
+        when(menuItemRepository.findById(21L)).thenReturn(Optional.of(menuItem));
+        when(addOnRepository.findById(32L)).thenReturn(Optional.of(addOn));
+
+        assertThrows(IllegalArgumentException.class, () -> orderService.createOrder(orderRequest));
+
+        addOn.setAvailable(false);
+        menuItem.setAddOns(List.of(addOn));
+        when(orderRepository.findByIdempotencyKey("checkout-unavailable")).thenReturn(Optional.empty());
+        orderRequest.setIdempotencyKey("checkout-unavailable");
+        assertThrows(IllegalArgumentException.class, () -> orderService.createOrder(orderRequest));
         verify(orderRepository, never()).save(any(Order.class));
     }
 

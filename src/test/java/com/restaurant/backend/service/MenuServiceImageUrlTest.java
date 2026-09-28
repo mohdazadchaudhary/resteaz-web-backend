@@ -55,10 +55,66 @@ class MenuServiceImageUrlTest {
     }
 
     @Test
+    void acceptsPublicImageUrlsLongerThanVarchar255() {
+        when(categoryRepository.findById(1L)).thenReturn(Optional.of(category));
+        when(menuItemRepository.save(any(MenuItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        String imageUrl = "https://images.example.org/" + "a".repeat(280) + ".jpg";
+
+        assertEquals(imageUrl, menuService.createMenuItem(request(imageUrl)).getImageUrl());
+    }
+
+    @Test
+    void acceptsDescriptionsLongerThanVarchar255WithinFormLimit() {
+        when(categoryRepository.findById(1L)).thenReturn(Optional.of(category));
+        when(menuItemRepository.save(any(MenuItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        MenuItemRequest request = request("/uploads/menu-items/123e4567-e89b-12d3-a456-426614174000.png");
+        request.setDescription("a".repeat(300));
+
+        assertEquals(300, menuService.createMenuItem(request).getDescription().length());
+    }
+
+    @Test
     void rejectsNonHttpImageUrls() {
         MenuItemRequest request = request("javascript:alert(1)");
 
         assertThrows(InvalidImageUrlException.class, () -> menuService.createMenuItem(request));
+    }
+
+    @Test
+    void rejectsDataUrlsInsteadOfStoringImageData() {
+        MenuItemRequest request = request("data:image/png;base64,aGVsbG8=");
+
+        InvalidImageUrlException error = assertThrows(
+                InvalidImageUrlException.class,
+                () -> menuService.createMenuItem(request));
+        assertEquals("Image data must be uploaded; provide an HTTP or HTTPS image URL", error.getMessage());
+    }
+
+    @Test
+    void rejectsImageUrlsLongerThanSupportedLimit() {
+        MenuItemRequest request = request("https://images.example.org/" + "a".repeat(2048));
+
+        assertThrows(InvalidImageUrlException.class, () -> menuService.createMenuItem(request));
+    }
+
+    @Test
+    void rejectsMenuItemNameLongerThanFormLimit() {
+        MenuItemRequest request = request("");
+        request.setName("a".repeat(121));
+
+        assertEquals(
+                "Menu item name cannot exceed 120 characters",
+                assertThrows(IllegalArgumentException.class, () -> menuService.createMenuItem(request)).getMessage());
+    }
+
+    @Test
+    void rejectsMenuItemDescriptionLongerThanFormLimit() {
+        MenuItemRequest request = request("");
+        request.setDescription("a".repeat(501));
+
+        assertEquals(
+                "Menu item description cannot exceed 500 characters",
+                assertThrows(IllegalArgumentException.class, () -> menuService.createMenuItem(request)).getMessage());
     }
 
     @Test

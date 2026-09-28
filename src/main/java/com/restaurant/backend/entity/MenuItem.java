@@ -3,6 +3,8 @@ package com.restaurant.backend.entity;
 import jakarta.persistence.*;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "menu_items")
@@ -20,6 +22,7 @@ public class MenuItem {
     @Column(nullable = false)
     private BigDecimal price;
 
+    @Column(length = 2048)
     private String imageUrl;
 
     @Column(length = 32)
@@ -32,6 +35,13 @@ public class MenuItem {
     @ManyToOne
     @JoinColumn(name = "category_id", nullable = false)
     private Category category;
+
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "menu_item_add_ons",
+            joinColumns = @JoinColumn(name = "menu_item_id"),
+            inverseJoinColumns = @JoinColumn(name = "add_on_id"))
+    private List<AddOn> addOns = new ArrayList<>();
 
     public MenuItem() {
     }
@@ -106,5 +116,13 @@ public class MenuItem {
 
     public void setCategory(Category category) {
         this.category = category;
+    }
+
+    public List<AddOn> getAddOns() {
+        return addOns;
+    }
+
+    public void setAddOns(List<AddOn> addOns) {
+        this.addOns = addOns;
     }
 }

@@ -1,17 +1,24 @@
 package com.restaurant.backend.service;
 
 import com.restaurant.backend.dto.MenuItemAvailabilityRequest;
+import com.restaurant.backend.dto.AddOnResponse;
+import com.restaurant.backend.dto.MenuItemAddOnRequest;
 import com.restaurant.backend.dto.MenuItemRequest;
 import com.restaurant.backend.dto.MenuItemResponse;
+import com.restaurant.backend.entity.AddOn;
 import com.restaurant.backend.entity.Category;
 import com.restaurant.backend.entity.MenuItem;
+import com.restaurant.backend.repository.AddOnRepository;
 import com.restaurant.backend.repository.CategoryRepository;
 import com.restaurant.backend.repository.MenuItemRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.net.URI;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.HashSet;
 import java.util.stream.Collectors;
 
 @Service
@@ -19,18 +26,23 @@ public class MenuService {
 
     private final MenuItemRepository menuItemRepository;
     private final CategoryRepository categoryRepository;
+    private final AddOnRepository addOnRepository;
 
-    public MenuService(MenuItemRepository menuItemRepository, CategoryRepository categoryRepository) {
+    public MenuService(MenuItemRepository menuItemRepository, CategoryRepository categoryRepository,
+                       AddOnRepository addOnRepository) {
         this.menuItemRepository = menuItemRepository;
         this.categoryRepository = categoryRepository;
+        this.addOnRepository = addOnRepository;
     }
 
+    @Transactional(readOnly = true)
     public List<MenuItemResponse> getAllMenuItems() {
         return menuItemRepository.findAll().stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
     public MenuItemResponse getMenuItemById(Long id) {
         MenuItem menuItem = menuItemRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Menu item not found with id: " + id));
@@ -49,6 +61,8 @@ public class MenuService {
             throw new IllegalArgumentException("Price must be greater than or equal to 0");
         }
 
+        String imageUrl = validateImageUrl(request.getImageUrl());
+
         // Validate category
         if (request.getCategoryId() == null) {
             throw new IllegalArgumentException("Category is required");
@@ -65,11 +79,12 @@ public class MenuService {
         menuItem.setName(request.getName().trim());
         menuItem.setDescription(request.getDescription());
         menuItem.setPrice(request.getPrice());
-        menuItem.setImageUrl(request.getImageUrl());
+        menuItem.setImageUrl(imageUrl);
         menuItem.setDietaryType(normalizeDietaryType(request.getDietaryType()));
         menuItem.setPreparationTimeMinutes(validatePreparationTime(request.getPreparationTimeMinutes()));
         menuItem.setCategory(category);
         menuItem.setAvailable(request.getAvailable() != null ? request.getAvailable() : true);
+        menuItem.setAddOns(request.getAddOns() == null ? new ArrayList<>() : resolveAddOns(request.getAddOns()));
 
         MenuItem savedMenuItem = menuItemRepository.save(menuItem);
         return mapToResponse(savedMenuItem);
@@ -109,7 +124,7 @@ public class MenuService {
         }
 
         if (request.getImageUrl() != null) {
-            menuItem.setImageUrl(request.getImageUrl());
+            menuItem.setImageUrl(validateImageUrl(request.getImageUrl()));
         }
 
         if (request.getDietaryType() != null) {
@@ -122,6 +137,10 @@ public class MenuService {
 
         if (request.getAvailable() != null) {
             menuItem.setAvailable(request.getAvailable());
+        }
+
+        if (request.getAddOns() != null) {
+            menuItem.setAddOns(resolveAddOns(request.getAddOns()));
         }
 
         MenuItem savedMenuItem = menuItemRepository.save(menuItem);
@@ -164,6 +183,95 @@ public class MenuService {
             response.setCategory(categoryResponse);
         }
 
+        response.setAddOns(menuItem.getAddOns().stream()
+                .map(this::mapAddOn)
+                .collect(Collectors.toList()));
+        return response;
+    }
+
+    private List<AddOn> resolveAddOns(List<MenuItemAddOnRequest> requests) {
+        List<AddOn> addOns = new ArrayList<>();
+        java.util.Set<Long> seenIds = new HashSet<>();
+        java.util.Set<String> seenNames = new HashSet<>();
+        for (MenuItemAddOnRequest request : requests) {
+            if (request == null) {
+                throw new IllegalArgumentException("Add-on entry is required");
+            }
+            AddOn addOn;
+            if (request.getId() != null) {
+                if (!seenIds.add(request.getId())) {
+                    throw new IllegalArgumentException("An add-on cannot be attached more than once");
+                }
+                addOn = addOnRepository.findById(request.getId())
+                        .orElseThrow(() -> new IllegalArgumentException("Add-on not found: " + request.getId()));
+                if (request.getPrice() != null) {
+                    validateAddOnPrice(request.getPrice());
+                    addOn.setPrice(request.getPrice());
+                }
+                if (request.getName() != null && !request.getName().isBlank()) {
+                    addOn.setName(validateAddOnName(request.getName()));
+                }
+                if (request.getDescription() != null) {
+                    addOn.setDescription(request.getDescription().trim());
+                }
+                if (request.getDietaryType() != null && !request.getDietaryType().isBlank()) {
+                    addOn.setDietaryType(normalizeAddOnDietaryType(request.getDietaryType()));
+                }
+                if (request.getAvailable() != null) {
+                    addOn.setAvailable(request.getAvailable());
+                }
+                addOns.add(addOnRepository.save(addOn));
+            } else {
+                addOn = new AddOn();
+                addOn.setName(validateAddOnName(request.getName()));
+                String normalizedName = addOn.getName().toLowerCase(java.util.Locale.ROOT);
+                if (!seenNames.add(normalizedName) || addOnRepository.existsByNameIgnoreCase(addOn.getName())) {
+                    throw new IllegalArgumentException(
+                            "Add-on already exists; attach the existing add-on instead");
+                }
+                addOn.setPrice(request.getPrice());
+                validateAddOnPrice(addOn.getPrice());
+                addOn.setDescription(request.getDescription() == null ? null : request.getDescription().trim());
+                addOn.setDietaryType(normalizeAddOnDietaryType(request.getDietaryType()));
+                addOn.setAvailable(request.getAvailable() == null || request.getAvailable());
+                addOns.add(addOnRepository.save(addOn));
+            }
+        }
+        return addOns;
+    }
+
+    private String validateAddOnName(String name) {
+        if (name == null || name.isBlank() || name.trim().length() > 120) {
+            throw new IllegalArgumentException("Add-on name is required and must be at most 120 characters");
+        }
+        return name.trim();
+    }
+
+    private void validateAddOnPrice(BigDecimal price) {
+        if (price == null || price.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Add-on price must be greater than zero");
+        }
+    }
+
+    private String normalizeAddOnDietaryType(String dietaryType) {
+        if (dietaryType == null || dietaryType.isBlank()) {
+            return null;
+        }
+        String normalized = dietaryType.trim().toLowerCase(java.util.Locale.ROOT);
+        if (!List.of("veg", "non-veg").contains(normalized)) {
+            throw new IllegalArgumentException("Add-on type must be veg or non-veg");
+        }
+        return normalized;
+    }
+
+    private AddOnResponse mapAddOn(AddOn addOn) {
+        AddOnResponse response = new AddOnResponse();
+        response.setId(addOn.getId());
+        response.setName(addOn.getName());
+        response.setDescription(addOn.getDescription());
+        response.setPrice(addOn.getPrice());
+        response.setDietaryType(addOn.getDietaryType());
+        response.setAvailable(addOn.isAvailable());
         return response;
     }
 
@@ -183,5 +291,38 @@ public class MenuService {
             throw new IllegalArgumentException("Preparation time cannot be negative");
         }
         return preparationTimeMinutes;
+    }
+
+    private String validateImageUrl(String imageUrl) {
+        if (imageUrl == null || imageUrl.isBlank()) {
+            return null;
+        }
+
+        String value = imageUrl.trim();
+        if (value.matches("^/uploads/menu-items/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\.(jpg|png|gif)$")) {
+            return value;
+        }
+        if (value.length() > 2048) {
+            throw new InvalidImageUrlException("Image URL cannot exceed 2048 characters");
+        }
+
+        URI uri;
+        try {
+            uri = URI.create(value);
+        } catch (IllegalArgumentException exception) {
+            throw new InvalidImageUrlException("Image URL must be a valid HTTP or HTTPS URL");
+        }
+
+        String scheme = uri.getScheme();
+        if (uri.getHost() == null || uri.getUserInfo() != null
+                || (uri.getPort() != -1 && (uri.getPort() < 1 || uri.getPort() > 65535))
+                || !("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme))) {
+            throw new InvalidImageUrlException("Image URL must be a valid HTTP or HTTPS URL");
+        }
+        String normalizedUrl = uri.toASCIIString();
+        if (normalizedUrl.length() > 2048) {
+            throw new InvalidImageUrlException("Image URL cannot exceed 2048 characters");
+        }
+        return normalizedUrl;
     }
 }

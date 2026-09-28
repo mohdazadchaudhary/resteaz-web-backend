@@ -42,9 +42,6 @@ public class MenuController {
             return ResponseEntity.ok(menuItem);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
-        } catch (DataIntegrityViolationException e) {
-            return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body("This menu item is referenced by existing orders and cannot be deleted. Disable it instead to keep order history intact.");
         }
     }
 
@@ -90,6 +87,9 @@ public class MenuController {
             return ResponseEntity.ok().build();
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+        } catch (DataIntegrityViolationException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body("This menu item is referenced by existing orders and cannot be deleted. Disable it instead to keep order history intact.");
         }
     }
 

@@ -8,6 +8,8 @@ public class MenuItemResponse {
     private String description;
     private BigDecimal price;
     private String imageUrl;
+    private String dietaryType;
+    private Integer preparationTimeMinutes;
     private boolean available;
     private CategoryResponse category;
 
@@ -52,6 +54,22 @@ public class MenuItemResponse {
 
     public void setImageUrl(String imageUrl) {
         this.imageUrl = imageUrl;
+    }
+
+    public String getDietaryType() {
+        return dietaryType;
+    }
+
+    public void setDietaryType(String dietaryType) {
+        this.dietaryType = dietaryType;
+    }
+
+    public Integer getPreparationTimeMinutes() {
+        return preparationTimeMinutes;
+    }
+
+    public void setPreparationTimeMinutes(Integer preparationTimeMinutes) {
+        this.preparationTimeMinutes = preparationTimeMinutes;
     }
 
     public boolean isAvailable() {

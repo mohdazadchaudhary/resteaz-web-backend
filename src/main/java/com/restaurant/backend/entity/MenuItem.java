@@ -22,6 +22,11 @@ public class MenuItem {
 
     private String imageUrl;
 
+    @Column(length = 32)
+    private String dietaryType;
+
+    private Integer preparationTimeMinutes;
+
     private boolean available = true;
 
     @ManyToOne
@@ -69,6 +74,22 @@ public class MenuItem {
 
     public void setImageUrl(String imageUrl) {
         this.imageUrl = imageUrl;
+    }
+
+    public String getDietaryType() {
+        return dietaryType;
+    }
+
+    public void setDietaryType(String dietaryType) {
+        this.dietaryType = dietaryType;
+    }
+
+    public Integer getPreparationTimeMinutes() {
+        return preparationTimeMinutes;
+    }
+
+    public void setPreparationTimeMinutes(Integer preparationTimeMinutes) {
+        this.preparationTimeMinutes = preparationTimeMinutes;
     }
 
     public boolean isAvailable() {

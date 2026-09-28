@@ -7,6 +7,8 @@ public class MenuItemRequest {
     private String description;
     private BigDecimal price;
     private String imageUrl;
+    private String dietaryType;
+    private Integer preparationTimeMinutes;
     private Long categoryId;
     private Boolean available;
 
@@ -43,6 +45,22 @@ public class MenuItemRequest {
 
     public void setImageUrl(String imageUrl) {
         this.imageUrl = imageUrl;
+    }
+
+    public String getDietaryType() {
+        return dietaryType;
+    }
+
+    public void setDietaryType(String dietaryType) {
+        this.dietaryType = dietaryType;
+    }
+
+    public Integer getPreparationTimeMinutes() {
+        return preparationTimeMinutes;
+    }
+
+    public void setPreparationTimeMinutes(Integer preparationTimeMinutes) {
+        this.preparationTimeMinutes = preparationTimeMinutes;
     }
 
     public Long getCategoryId() {

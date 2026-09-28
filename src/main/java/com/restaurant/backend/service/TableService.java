@@ -53,6 +53,9 @@ public class TableService {
         if (!table.isActive()) {
             throw new IllegalStateException("Table is currently unavailable");
         }
+        if (table.getRestaurant() == null || !table.getRestaurant().isActive()) {
+            throw new IllegalStateException("Restaurant is currently unavailable");
+        }
 
         return mapToResponse(table);
     }

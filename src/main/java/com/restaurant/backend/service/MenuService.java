@@ -66,6 +66,8 @@ public class MenuService {
         menuItem.setDescription(request.getDescription());
         menuItem.setPrice(request.getPrice());
         menuItem.setImageUrl(request.getImageUrl());
+        menuItem.setDietaryType(normalizeDietaryType(request.getDietaryType()));
+        menuItem.setPreparationTimeMinutes(validatePreparationTime(request.getPreparationTimeMinutes()));
         menuItem.setCategory(category);
         menuItem.setAvailable(request.getAvailable() != null ? request.getAvailable() : true);
 
@@ -110,6 +112,14 @@ public class MenuService {
             menuItem.setImageUrl(request.getImageUrl());
         }
 
+        if (request.getDietaryType() != null) {
+            menuItem.setDietaryType(normalizeDietaryType(request.getDietaryType()));
+        }
+
+        if (request.getPreparationTimeMinutes() != null) {
+            menuItem.setPreparationTimeMinutes(validatePreparationTime(request.getPreparationTimeMinutes()));
+        }
+
         if (request.getAvailable() != null) {
             menuItem.setAvailable(request.getAvailable());
         }
@@ -142,6 +152,8 @@ public class MenuService {
         response.setDescription(menuItem.getDescription());
         response.setPrice(menuItem.getPrice());
         response.setImageUrl(menuItem.getImageUrl());
+        response.setDietaryType(menuItem.getDietaryType());
+        response.setPreparationTimeMinutes(menuItem.getPreparationTimeMinutes());
         response.setAvailable(menuItem.isAvailable());
 
         if (menuItem.getCategory() != null) {
@@ -153,5 +165,23 @@ public class MenuService {
         }
 
         return response;
+    }
+
+    private String normalizeDietaryType(String dietaryType) {
+        if (dietaryType == null || dietaryType.isBlank()) {
+            return null;
+        }
+        String normalized = dietaryType.trim().toLowerCase();
+        if (!List.of("veg", "non-veg", "vegan").contains(normalized)) {
+            throw new IllegalArgumentException("Dietary type must be veg, non-veg, or vegan");
+        }
+        return normalized;
+    }
+
+    private Integer validatePreparationTime(Integer preparationTimeMinutes) {
+        if (preparationTimeMinutes != null && preparationTimeMinutes < 0) {
+            throw new IllegalArgumentException("Preparation time cannot be negative");
+        }
+        return preparationTimeMinutes;
     }
 }
